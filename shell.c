@@ -7,16 +7,19 @@
 
 #define deliminator " "
 
-static char* initPath = "/bin/";
-static char* usrPath = "/usr/bin/";
-const char* builtInFunction[] = {"pancake_exit", "[pancake_cd"};
+int numShellPath = 2;
+static char** shellPath;
+static int numArgs;
+const char* builtInFunction[] = {"pancake_exit", "[pancake_cd", "pancake_path"};
 
+// Exit command 
 void pancake_exit() {
   exit(0);
 }
 
+// Change directory command
 void pancake_cd(char** args) {
-  if (args[2] != NULL) {
+  if (numArgs > 2) {
     printf("Too many arguments\n");
     return;
   }  
@@ -24,6 +27,34 @@ void pancake_cd(char** args) {
     printf("Path not found\n");
   }
   return;
+}
+
+// Path command
+void pancake_path(char** args) {
+  if (numArgs == 1) {
+    memset(shellPath, 0, sizeof(*shellPath)*numShellPath);
+    return;
+  } else if (numArgs > 1) {
+    // Realloc if it needs more space
+    if (numArgs - 1 > numShellPath) {
+      shellPath = realloc(shellPath, sizeof(char*)*numArgs-1); 
+      numShellPath = numArgs - 1;
+    }
+    // Set shellPath to given paths
+    for (int i = 0; i < numArgs - 1; i++) {
+      shellPath[i] = args[i+1];
+    }
+    // Set remaining paths to NULL
+    memset(&shellPath[numArgs-1], 0, sizeof(char*)*(numShellPath-(numArgs-1)));
+  }
+  return;
+}
+
+void pancake_debug(char** args) {
+  for (int i = 0; i < numShellPath; i++) {
+    printf("%s\n", shellPath[i]);
+  }
+  printf("size of numPath: %d\n", numShellPath);
 }
 
 // Parses given line and returns pointer of char pointers
@@ -50,6 +81,7 @@ char **parseLine(char *line) {
     }
     temp = strsep(&line, deliminator);
     i++;
+    numArgs++;
   }
   return args;
 }
@@ -82,22 +114,40 @@ void executeArg(char **args) {
   }
 }
 
+char* concatenatePath(const char* s1, const char* s2) {
+  char* result = malloc(strlen(s1) + strlen(s2) + 2);
+  if (result == NULL) {
+    printf("Malloc error");
+    exit(1);
+  }
+  strcpy(result, s1);
+  strcat(result, "/");
+  strcat(result, s2);
+
+  return result;
+}
+
 // Searches if command executable exists
 void searchExecutable(char** args) {
-  char* temp = strdup(args[0]); 
-  int len = strlen(temp);
-  char* path1 = strdup(initPath);
-  char* path2 = strdup(usrPath);
-  strncat(path1, temp, len);
-  strncat(path2, temp, len);
+  bool found = false;
 
-  if (access(path1, X_OK) == -1) {
-    if (access(path2, X_OK) == -1) {
-      printf("pancake: command not found: %s\n", temp);
-      return;
+  for (int i = 0; i < numShellPath; i++) {
+    if (shellPath[i] != NULL) {
+      char* path = concatenatePath(shellPath[i], args[0]);
+      printf("path: %s\n", path);
+      if (access(path, X_OK) == 0) {
+        found = true;
+      }
+      free(path);
     }
   }
-  executeArg(args);
+
+  if (found) {
+    executeArg(args);
+    return;
+  } else {
+    printf("pancake: command not found: %s\n", args[0]);
+  }
 }
 
 // Search if args contains built-in command
@@ -110,17 +160,30 @@ void searchBuiltIn(char** args) {
     pancake_cd(args);
     return; 
   }
-
+  if (strcmp(args[0], "path") == 0) {
+    pancake_path(args);
+    return;
+  }
+  if (strcmp(args[0], "debug") == 0) {
+    pancake_debug(args);
+    return;
+  }
   searchExecutable(args);
+   
+  return;
 }
 
 int main(int argc, char *argv[]) {
   char *line;
   char **args;
   bool temp = true;
+  shellPath = malloc(sizeof(char*)*numShellPath);
+  shellPath[0] = "/bin";
+  shellPath[1] = "/usr/bin";
 
   do {
     printf("pancake> ");
+    numArgs = 0;
     line = readLine();
     args = parseLine(line);
     searchBuiltIn(args);
@@ -129,5 +192,6 @@ int main(int argc, char *argv[]) {
 
   free(line);
   free(args);
+  free(shellPath);
   return 0;
 }
