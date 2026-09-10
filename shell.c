@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <fcntl.h>
 #include <unistd.h>
 
 #define deliminator " "
@@ -134,7 +135,7 @@ void searchExecutable(char** args) {
   for (int i = 0; i < numShellPath; i++) {
     if (shellPath[i] != NULL) {
       char* path = concatenatePath(shellPath[i], args[0]);
-      printf("path: %s\n", path);
+      //printf("path: %s\n", path);
       if (access(path, X_OK) == 0) {
         found = true;
       }
@@ -150,8 +151,44 @@ void searchExecutable(char** args) {
   }
 }
 
+void pancake_redirection(char** args, int pos) {
+  // Input validation
+  if (pos != (numArgs - 2)) {
+    printf("Too many arguments: Usage: %s > <dir>\n", args[0]);
+    return;
+  }
+  char** realArgs = malloc(sizeof(char*)*(numArgs - 2));
+  for (int i = 0; i < pos; i++) {
+    realArgs[i] = args[i];
+    //printf("%d: %s\n", i, realArgs[i]);
+  }
+  char* fileName = args[pos+1];
+  mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
+  int output = dup(1);
+  int fd = open(fileName, O_WRONLY|O_CREAT|O_TRUNC, mode);
+  if (fd == -1) {
+    printf("%s: Permission error", fileName);
+    return;
+  } 
+  fflush(stdout);
+  if (dup2(fd, STDOUT_FILENO) == -1) {
+    printf("File redirection error");
+    return;
+  }
+  searchExecutable(realArgs);
+  free(realArgs);
+  close(fd);
+  dup2(output, 1);
+}
+
 // Search if args contains built-in command
 void searchBuiltIn(char** args) {
+  for (int i = 0; i < numArgs; i++) {
+    if (strcmp(args[i], ">") == 0) {
+      pancake_redirection(args, i);
+      return;
+    }
+  }
   if (strcmp(args[0], "exit") == 0) {
     pancake_exit();
     return;
@@ -173,6 +210,16 @@ void searchBuiltIn(char** args) {
   return;
 }
 
+void searchSpecial(char** args) {
+  for (int i = 0; i < numArgs; i++) {
+    if (strcmp(args[i], ">") == 0) {
+      pancake_redirection(args, i);
+      return;
+    }
+  }
+  searchBuiltIn(args);
+}
+
 int main(int argc, char *argv[]) {
   char *line;
   char **args;
@@ -186,7 +233,7 @@ int main(int argc, char *argv[]) {
     numArgs = 0;
     line = readLine();
     args = parseLine(line);
-    searchBuiltIn(args);
+    searchSpecial(args);
 
   } while (temp);
 
