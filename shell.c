@@ -11,7 +11,7 @@
 int numShellPath = 2;
 static char** shellPath;
 static int numArgs;
-const char* builtInFunction[] = {"pancake_exit", "[pancake_cd", "pancake_path"};
+const char* builtInFunction[] = {"pancake_exit", "pancake_cd", "pancake_path"};
 
 // Exit command 
 void pancake_exit() {
@@ -115,6 +115,7 @@ void executeArg(char **args) {
   }
 }
 
+// Concatenates two given path with /
 char* concatenatePath(const char* s1, const char* s2) {
   char* result = malloc(strlen(s1) + strlen(s2) + 2);
   if (result == NULL) {
@@ -151,17 +152,19 @@ void searchExecutable(char** args) {
   }
 }
 
+// Custom redirection
 void pancake_redirection(char** args, int pos) {
   // Input validation
   if (pos != (numArgs - 2)) {
     printf("Too many arguments: Usage: %s > <dir>\n", args[0]);
     return;
   }
-  char** realArgs = malloc(sizeof(char*)*(numArgs - 2));
+  char** realArgs = malloc(sizeof(char*)*(pos+1)); // +1 for NULL
   for (int i = 0; i < pos; i++) {
     realArgs[i] = args[i];
     //printf("%d: %s\n", i, realArgs[i]);
   }
+  realArgs[pos] = NULL;
   char* fileName = args[pos+1];
   mode_t mode = S_IRUSR | S_IWUSR | S_IRGRP | S_IROTH;
   int output = dup(1);
@@ -170,25 +173,18 @@ void pancake_redirection(char** args, int pos) {
     printf("%s: Permission error", fileName);
     return;
   } 
-  fflush(stdout);
   if (dup2(fd, STDOUT_FILENO) == -1) {
     printf("File redirection error");
     return;
   }
   searchExecutable(realArgs);
   free(realArgs);
-  close(fd);
   dup2(output, 1);
+  close(fd);
 }
 
 // Search if args contains built-in command
 void searchBuiltIn(char** args) {
-  for (int i = 0; i < numArgs; i++) {
-    if (strcmp(args[i], ">") == 0) {
-      pancake_redirection(args, i);
-      return;
-    }
-  }
   if (strcmp(args[0], "exit") == 0) {
     pancake_exit();
     return;
