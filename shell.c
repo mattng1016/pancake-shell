@@ -5,6 +5,7 @@
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <pthread.h>
 
 #define deliminator " "
 
@@ -38,7 +39,7 @@ void pancake_path(char** args) {
   } else if (numArgs > 1) {
     // Realloc if it needs more space
     if (numArgs - 1 > numShellPath) {
-      shellPath = realloc(shellPath, sizeof(char*)*numArgs-1); 
+      shellPath = realloc(shellPath, sizeof(char*)*(numArgs-1)); 
       numShellPath = numArgs - 1;
     }
     // Set shellPath to given paths
@@ -156,7 +157,7 @@ void searchExecutable(char** args) {
 void pancake_redirection(char** args, int pos) {
   // Input validation
   if (pos != (numArgs - 2)) {
-    printf("Too many arguments: Usage: %s > <dir>\n", args[0]);
+    printf("Too many arguments: Usage: <command> > <dir>\n");
     return;
   }
   char** realArgs = malloc(sizeof(char*)*(pos+1)); // +1 for NULL
@@ -206,7 +207,7 @@ void searchBuiltIn(char** args) {
   return;
 }
 
-void searchSpecial(char** args) {
+void searchRedirection(char** args) {
   for (int i = 0; i < numArgs; i++) {
     if (strcmp(args[i], ">") == 0) {
       pancake_redirection(args, i);
@@ -214,6 +215,42 @@ void searchSpecial(char** args) {
     }
   }
   searchBuiltIn(args);
+}
+
+void parallelCommand(char** args) {
+  char*** cmdList = malloc(sizeof(char**)*(numArgs)); 
+  int start = 0, cmdCount = 1;
+  int totalArgs = numArgs;
+
+  for (int i = 0; i <= totalArgs; i++) {
+    bool isBoundary = (i == totalArgs) || (strcmp(args[i], "&") == 0);
+    if (isBoundary) {
+      int subNumArgs = i - start;
+      if (subNumArgs > 0) {
+        char** argv = malloc(sizeof(char*)*((i - start) + 1));
+        for (int j = 0; j < (i - start); j++) {
+          argv[j] = args[start + j];
+        }
+        argv[subNumArgs] = NULL;
+        cmdCount++;
+        cmdList[cmdCount - 1] = argv;
+        numArgs = subNumArgs;
+        searchRedirection(cmdList[cmdCount-1]);
+      }
+      start = i + 1;
+    }
+  }
+ return;
+}
+
+void searchParallel(char** args) {
+  for (int i = 0; i < numArgs; i++) {
+    if (strcmp(args[i], "&") == 0) {
+      parallelCommand(args);
+      return;
+    }
+  } 
+  searchRedirection(args);
 }
 
 int main(int argc, char *argv[]) {
@@ -229,7 +266,7 @@ int main(int argc, char *argv[]) {
     numArgs = 0;
     line = readLine();
     args = parseLine(line);
-    searchSpecial(args);
+    searchParallel(args);
 
   } while (temp);
 
