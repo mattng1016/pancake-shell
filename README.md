@@ -47,10 +47,10 @@ Built-ins are deliberately **not** forked — they run directly in the shell's o
 ## Known Limitations / Future Improvements
  
 - No pipes (`|`)
-- No background/parallel execution (`&`) yet
 - No quoted-string argument parsing (`echo "hello world"` splits into two arguments)
 - No job control (`fg`, `bg`, `jobs`)
-- 
+- More built-in commands such as ls
+
 ## License
  
 MIT
